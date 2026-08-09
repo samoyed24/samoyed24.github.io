@@ -1,2 +1,8 @@
 # Generated site output
 /public/
+
+# Hugo cache
+/resources/
+
+# Backups
+*.bak

@@ -1,37 +1,64 @@
 baseURL = 'https://samoyed24.github.io/'
-locale = 'zh-cn'
-title = "Samoyed's Blog"
-theme = 'PaperMod'
-
+title = "萨摩耶的个人博客"
+theme = 'hugo-theme-stack'
 enableRobotsTXT = true
 
+defaultContentLanguage = "zh-cn"
+defaultContentLanguageInSubdir = false
+hasCJKLanguage = true
+
+pagination.pagerSize = 5
+
+[permalinks]
+  post = "/posts/:slug/"
+
 [params]
-  description = '个人技术博客'
-  defaultTheme = 'auto'
-  ShowReadingTime = true
-  ShowShareButtons = false
-  ShowPostNavLinks = true
+  mainSections = ["posts"]
+  description = "个人技术博客"
+  rssFullContent = true
 
-  [params.homeInfoParams]
-    Title = '欢迎来到我的博客'
-    Content = '记录技术学习与实践的随笔。'
+  [params.footer]
+    since = 2026
 
-  [[params.socialIcons]]
-    name = 'github'
-    url = 'https://github.com/samoyed24'
+  [params.sidebar]
+    emoji = "✍️"
+    subtitle = "记录技术学习与实践的随笔"
+
+  [params.widgets]
+    homepage = [
+      { type = "search" },
+      { type = "archives", params = { limit = 10 } },
+      { type = "categories", params = { limit = 10 } },
+      { type = "tag-cloud", params = { limit = 10 } },
+    ]
+    page = [{ type = "toc" }]
+
+  [params.comments]
+    enabled = false
+
+  [params.cookies]
+    enabled = false
 
 [[menu.main]]
-    identifier = 'posts'
-    name = '博客'
-    url = '/posts/'
-    weight = 1
-  [[menu.main]]
-    identifier = 'search'
-    name = '搜索'
-    url = '/search/'
-    weight = 2
-  [[menu.main]]
-    identifier = 'archives'
-    name = '归档'
-    url = '/archives/'
-    weight = 3
+  identifier = 'posts'
+  name = '博客'
+  url = '/posts/'
+  weight = 1
+[[menu.main]]
+  identifier = 'search'
+  name = '搜索'
+  url = '/search/'
+  weight = 2
+[[menu.main]]
+  identifier = 'archives'
+  name = '归档'
+  url = '/archives/'
+  weight = 3
+
+[[menu.social]]
+  name = 'GitHub'
+  url = 'https://github.com/samoyed24'
+  weight = 1
+  [menu.social.params]
+    icon = 'brand-github'
+    newTab = true
