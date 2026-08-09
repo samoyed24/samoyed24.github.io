@@ -1,4 +1,4 @@
-baseURL = 'https://samoyed24.github.io/'
+baseURL = 'https://samoyed24.github.io/my-blog/'
 locale = 'zh-cn'
 title = "Samoyed's Blog"
 theme = 'PaperMod'
