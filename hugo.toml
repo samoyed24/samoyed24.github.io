@@ -1,0 +1,37 @@
+baseURL = 'https://samoyed24.github.io/'
+locale = 'zh-cn'
+title = "Samoyed's Blog"
+theme = 'PaperMod'
+
+enableRobotsTXT = true
+
+[params]
+  description = '个人技术博客'
+  defaultTheme = 'auto'
+  ShowReadingTime = true
+  ShowShareButtons = false
+  ShowPostNavLinks = true
+
+  [params.homeInfoParams]
+    Title = '欢迎来到我的博客'
+    Content = '记录技术学习与实践的随笔。'
+
+  [[params.socialIcons]]
+    name = 'github'
+    url = 'https://github.com/samoyed24'
+
+[[menu.main]]
+    identifier = 'posts'
+    name = '博客'
+    url = '/posts/'
+    weight = 1
+  [[menu.main]]
+    identifier = 'search'
+    name = '搜索'
+    url = '/search/'
+    weight = 2
+  [[menu.main]]
+    identifier = 'archives'
+    name = '归档'
+    url = '/archives/'
+    weight = 3
