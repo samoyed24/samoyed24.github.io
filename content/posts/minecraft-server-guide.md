@@ -12,7 +12,7 @@ description = 'Minecraft 1.20.1 整合包 MegaFunPack 的下载、安装与连�
 ## 一、环境要求
 
 - **PCL2**（启动器，支持 Windows）
-- 电脑内存建议 **8G 以上**（整合包含 78 个模组）
+- 电脑内存建议 **8G 以上**（整合包含 80 个模组）
 - 已安装 Java 17 或 21
 
 ## 二、下载整合包
@@ -27,7 +27,7 @@ description = 'Minecraft 1.20.1 整合包 MegaFunPack 的下载、安装与连�
 
 1. 打开 **PCL2**，进入左侧「版本列表」
 2. 点击「**安装整合包**」，选择刚下载的 `MegaFunPack-client-full.zip`（或直接把 zip 拖进 PCL2 窗口）
-3. PCL2 会自动创建 `MegaFunPack` 实例，并安装 **Forge 47.4.22** + 解压全部 78 个模组
+3. PCL2 会自动创建 `MegaFunPack` 实例，并安装 **Forge 47.4.22** + 解压全部 80 个模组
 4. 首次启动前，在「设置 → 启动 → 内存设置」把内存拉到 **6G~8G**
 5. 选择 `MegaFunPack` 版本启动（首次加载较久，属正常）
 
@@ -47,7 +47,7 @@ description = 'Minecraft 1.20.1 整合包 MegaFunPack 的下载、安装与连�
 3. 之后：输入密码登录即可
 4. 注意：密码连错 3 次会被踢出服务器
 
-## 六、服务器模组列表（78 个）
+## 六、服务器模组列表（80 个）
 
 | 分类 | 模组 | 说明 |
 |---|---|---|
@@ -68,6 +68,7 @@ description = 'Minecraft 1.20.1 整合包 MegaFunPack 的下载、安装与连�
 | | Iron Chests | 更多容量箱子 |
 | | Tech Reborn | 科技模组 |
 | **冒险 / 探索 / 维度** | Terralith | 全新地形群系 |
+| | Tombstone | 死亡原地生成墓碑，保留物品 |
 | | Alex's Mobs | 大量新生物 |
 | | Alex's Caves | 全新维度 |
 | | The Aether | 天堂维度 |
@@ -89,8 +90,10 @@ description = 'Minecraft 1.20.1 整合包 MegaFunPack 的下载、安装与连�
 | | Supplementaries | 装饰 + 实用工具 |
 | | Decorative Blocks | 装饰方块 |
 | | Cooking for Blockheads | 厨房料理 |
+| | Farmer's Delight | 农场与美食烹饪 |
 | | Amendments | 原版方块增强 |
-| **实用 QoL** | JEI | 配方查看 |
+| **实用 QoL** | FallingTree | 一键砍倒整棵树 |
+| | JEI | 配方查看 |
 | | Jade | 准星指向信息 |
 | | AppleSkin | 显示饱食度 / 饱和值 |
 | | Xaero's Minimap | 小地图 |
@@ -113,6 +116,6 @@ description = 'Minecraft 1.20.1 整合包 MegaFunPack 的下载、安装与连�
 - **小地图 / 地图**：按 `M` 键打开世界地图，`H` 键小地图设置
 - **查看配方**：按 `E` 打开背包，鼠标指向任意物品查看合成表
 - **语音联机**：需客户端同样启用 Simple Voice Chat，进服自动连接
-- 若连接失败，请确认客户端模组与服务端一致（78 个），否则会被服务器拒绝
+- 若连接失败，请确认客户端模组与服务端一致（80 个），否则会被服务器拒绝
 
 玩得开心！
