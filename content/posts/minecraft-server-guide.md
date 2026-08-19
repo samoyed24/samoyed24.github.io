@@ -11,7 +11,7 @@ description = 'Minecraft 1.20.1 整合包 MegaFunPack 的下载、安装与连�
 
 ## 一、环境要求
 
-- **PCL2**（启动器，支持 Windows）
+- **PCL2**（启动器，支持 Windows）或 **Prism Launcher**（支持 Windows / macOS / Linux）
 - 电脑内存建议 **8G 以上**（整合包含 80 个模组）
 - 已安装 Java 17 或 21
 
@@ -23,13 +23,23 @@ description = 'Minecraft 1.20.1 整合包 MegaFunPack 的下载、安装与连�
 
 文件较大（约 380MB），请耐心等待。
 
-## 三、安装（PCL2）
+## 三、安装
+
+### Windows：PCL2
 
 1. 打开 **PCL2**，进入左侧「版本列表」
 2. 点击「**安装整合包**」，选择刚下载的 `MegaFunPack-client-full.zip`（或直接把 zip 拖进 PCL2 窗口）
 3. PCL2 会自动创建 `MegaFunPack` 实例，并安装 **Forge 47.4.22** + 解压全部 80 个模组
 4. 首次启动前，在「设置 → 启动 → 内存设置」把内存拉到 **6G~8G**
 5. 选择 `MegaFunPack` 版本启动（首次加载较久，属正常）
+
+### macOS：Prism Launcher
+
+1. 打开官网 <https://prismlauncher.org/download/> 下载 **macOS** 版（Apple Silicon 选 `macOS Universal`，Intel 选 `macOS`），解压后把 `Prism Launcher.app` 拖入「应用程序」文件夹。若提示「无法打开，因为无法验证开发者」，右键点击图标 →「打开」→ 再次点击「打开」
+   > 也可以用 Homebrew 安装：`brew install --cask prismlauncher`
+2. 点击左上角「**添加实例**（Add Instance）」→「**从 ZIP 导入**（Import from ZIP）」，选中 `MegaFunPack-client-full.zip` 并确定，Prism 会自动安装 **Minecraft 1.20.1** + **Forge 47.4.22** + 解压全部 80 个模组
+3. 右键实例 →「**编辑实例**」→「**设置**」→「**Java**」选项卡：建议勾选「自动检测 Java 环境」，若未检测到点击「自动下载」安装 **Java 17**；再切换到「**内存**」选项卡，把「最大内存分配」拉到 **6144 ~ 8192 MB**
+4. 关闭并启动实例（首次加载较久，属正常）
 
 ## 四、连接服务器
 
