@@ -1,0 +1,443 @@
++++
+date = '2026-09-22T21:00:00+08:00'
+draft = false
+title = 'Claude Code 与 Codex 接入 Portcloud 网关教程'
+description = '把 Claude Code 和 Codex 指向自建的 LiteLLM 网关，统一调度 Workbuddy 上游模型'
++++
+
+Claude Code 和 Codex 默认分别连接 Anthropic 与 OpenAI 官方 API。但两者都支持通过配置指向自建网关：Claude Code 用 `ANTHROPIC_BASE_URL`，Codex 用 `model_providers`。
+
+本文介绍如何把这两个工具都接到 **Portcloud 网关** —— 一个用 LiteLLM Proxy 搭建的聚合层，背后对接 Workbuddy 上游，对外提供统一的 API。
+
+> 本文面向已获得 Portcloud API Key 的用户。如果你还没有 Key，请联系管理员。
+
+---
+
+## 一、为什么需要这一层
+
+直接对接上游供应商，每个工具都要单独适配协议、单独处理限流和故障。LiteLLM 网关把这些收拢成一层：
+
+- **协议统一**：同时提供 Anthropic `/v1/messages` 和 OpenAI `/v1/responses`、`/v1/chat/completions`，客户端不用改代码
+- **多上游调度**：同一个模型名背后可以挂多个上游，主上游故障时自动降级
+- **统一观测**：所有请求的用量、耗时、错误集中在一处
+
+对 Claude Code 和 Codex 而言，只是换了个接入地址，其余体验不变。
+
+---
+
+## 二、获取 API Key
+
+向管理员申请后你会拿到一个形如 `sk-xxxxxxxx` 的 Key。这个 Key 决定了你能访问哪些模型。
+
+如果请求了不在权限范围内的模型，网关会返回 `403`：
+
+```
+key not allowed to access model. This key can only access [...]
+```
+
+> **安全提示**：API Key 等同于账号密码。不要提交到 Git 仓库、不要贴进聊天记录、不要写进公开文档。建议通过环境变量或本地配置文件注入。
+
+---
+
+## 三、可用模型
+
+网关当前提供以下模型：
+
+| 模型名 | 上下文 | 最大输出 | 说明 |
+|---|---|---|---|
+| `deepseek-v4.1-flash` | 1M | 128K | DeepSeek，支持视觉与工具调用 |
+| `hy3` | 192K | 64K | 混元 |
+| `hy4-preview` | 1M | 64K | 混元预览版 |
+| `hy4-preview-f` | 1M | 64K | 混元预览版 |
+
+查询当前完整列表：
+
+```bash
+curl https://litellm.portcloud.online/v1/models \
+  -H "x-api-key: sk-你的key"
+```
+
+> **关于 `[1m]` 后缀**：上下文为 1M 的模型（`deepseek-v4.1-flash`、`hy4-preview`、`hy4-preview-f`），在 Claude Code 里使用时建议在模型名后加上 `[1m]`，例如 `deepseek-v4.1-flash[1m]`。原因见下方 [4.5 节](#45-关于-1m-后缀)。
+
+---
+
+## 四、接入 Claude Code
+
+### 4.1 环境变量（推荐先这样验证）
+
+```bash
+export ANTHROPIC_BASE_URL="https://litellm.portcloud.online"
+export ANTHROPIC_AUTH_TOKEN="sk-你的key"
+export ANTHROPIC_MODEL="deepseek-v4.1-flash[1m]"
+
+claude
+```
+
+三个变量的作用：
+
+| 变量 | 说明 |
+|---|---|
+| `ANTHROPIC_BASE_URL` | 网关地址。Claude Code 会自动拼接 `/v1/messages` |
+| `ANTHROPIC_AUTH_TOKEN` | 你的 API Key |
+| `ANTHROPIC_MODEL` | 默认使用的模型名 |
+
+### 4.2 写入配置文件（持久化）
+
+在 `~/.claude/settings.json` 中加入 `env` 段：
+
+```json
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://litellm.portcloud.online",
+    "ANTHROPIC_AUTH_TOKEN": "sk-你的key",
+    "ANTHROPIC_MODEL": "deepseek-v4.1-flash[1m]"
+  }
+}
+```
+
+这样每次启动 `claude` 都会自动生效，不用重复 export。
+
+> 如果该文件已存在，只需把 `env` 段合并进去，不要整个覆盖。
+
+### 4.3 项目级配置
+
+只想在某个项目里用网关，可以在项目根目录建 `.claude/settings.json`，内容同上。项目级配置优先级高于用户级。
+
+### 4.4 验证
+
+先做一次最小验证：
+
+```bash
+curl https://litellm.portcloud.online/v1/messages \
+  -H "x-api-key: sk-你的key" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "content-type: application/json" \
+  -d '{
+    "model": "deepseek-v4.1-flash[1m]",
+    "max_tokens": 100,
+    "messages": [{"role": "user", "content": "回复：OK"}]
+  }'
+```
+
+正常会返回标准的 Anthropic 格式：
+
+```json
+{
+  "id": "msg_...",
+  "type": "message",
+  "role": "assistant",
+  "model": "deepseek-v4.1-flash",
+  "content": [{"type": "text", "text": "OK"}],
+  "stop_reason": "end_turn"
+}
+```
+
+注意返回体里的 `model` 字段是**不带后缀**的 `deepseek-v4.1-flash` —— 网关会自动归一化，后缀只是给客户端看的。
+
+然后启动 Claude Code 随便问一句，能正常对话就说明接好了。
+
+### 4.5 关于 `[1m]` 后缀
+
+上下文为 **1M** 的模型，在 Claude Code 里建议在模型名后加 `[1m]` 后缀：
+
+```
+deepseek-v4.1-flash[1m]
+hy4-preview[1m]
+hy4-preview-f[1m]
+```
+
+**为什么要加**：Claude Code 这类 Agent 需要知道模型的上下文窗口大小，才能决定何时压缩历史、何时截断。它靠内置的模型表来查这个值，而表里只有官方模型。
+
+网关提供的这些模型名不在表内，Claude Code 查不到就会**退回到一个保守的默认值**，可能把上下文窗口估小。结果是：明明模型支持 1M，Agent 却按更小的窗口去压缩对话，长上下文能力用不满。
+
+加上 `[1m]` 后缀等于直接告诉 Agent「这个模型的窗口是 1M」，避免它误判。
+
+**哪些模型需要加**：
+
+| 模型 | 上下文 | 是否加 `[1m]` |
+|---|---|---|
+| `deepseek-v4.1-flash` | 1M | ✅ 建议加 |
+| `hy4-preview` | 1M | ✅ 建议加 |
+| `hy4-preview-f` | 1M | ✅ 建议加 |
+| `hy3` | 192K | ❌ 不需要 |
+
+`hy3` 的上下文不是 1M，加后缀反而会传递错误信息，保持原样即可。
+
+**注意事项**：
+
+- 后缀只影响客户端对上下文的判断，**不影响实际请求**。网关会自动去掉后缀再转发给上游
+- 网关对带后缀和不带后缀的模型名都接受，所以不加也能用，只是可能损失长上下文能力
+- 这个后缀是 Claude Code 侧的约定，**Codex 不适用**（Codex 的模型配置方式不同，见第五章）
+
+---
+
+## 五、接入 Codex
+
+Codex 走的是 OpenAI 的 **Responses API**，配置方式与 Claude Code 不同，需要在 `config.toml` 里声明一个自定义 provider。
+
+### 5.1 修改 config.toml
+
+编辑 `~/.codex/config.toml`：
+
+```toml
+model = "deepseek-v4.1-flash"
+model_provider = "portcloud"
+model_reasoning_effort = "medium"
+
+[model_providers.portcloud]
+name = "Portcloud"
+base_url = "https://litellm.portcloud.online/v1"
+env_key = "PORTCLOUD_API_KEY"
+wire_api = "responses"
+```
+
+各项含义：
+
+| 配置项 | 说明 |
+|---|---|
+| `model` | 默认模型名，取值见上方模型列表 |
+| `model_provider` | 指向下面定义的 provider 名称 |
+| `model_reasoning_effort` | 推理强度：`low` / `medium` / `high` |
+| `base_url` | 网关地址，**末尾要带 `/v1`** |
+| `env_key` | 存放 API Key 的**环境变量名**（不是 Key 本身） |
+| `wire_api` | 固定为 `responses`，Codex 依赖 Responses API |
+
+> **关键点**：`env_key` 填的是环境变量**名字**，Codex 会去读这个环境变量的值。Key 本身不写进配置文件，避免误提交。
+
+### 5.2 设置环境变量
+
+把 Key 写进 shell 配置（`~/.zshrc` 或 `~/.bashrc`）：
+
+```bash
+export PORTCLOUD_API_KEY="sk-你的key"
+```
+
+然后 `source ~/.zshrc` 或重开终端。
+
+### 5.3 验证
+
+```bash
+codex exec --skip-git-repo-check "回复：OK"
+```
+
+正常输出类似：
+
+```
+OpenAI Codex v0.155.1
+--------
+workdir: /your/path
+model: deepseek-v4.1-flash
+provider: portcloud
+--------
+codex
+OK
+```
+
+也可以直接启动交互模式：
+
+```bash
+codex
+```
+
+### 5.4 换模型
+
+改 `config.toml` 里的 `model` 即可，也可以在交互模式里临时切换：
+
+```bash
+codex -m hy3
+```
+
+---
+
+## 六、注意事项
+
+### 模型元数据警告
+
+首次用 Codex 连接时，可能会看到这样的警告：
+
+```
+warning: Model metadata for `deepseek-v4.1-flash` not found.
+Defaulting to fallback metadata; this can degrade performance and cause issues.
+```
+
+这是因为 Codex 内置的模型表里没有这些模型名。**不影响正常使用**，忽略即可。
+
+### 推理模型的 token 消耗
+
+部分模型会在正式回答前产生大量 reasoning token。如果 `max_tokens` 给得太小，可能全部被推理消耗掉，导致返回内容为空。用 curl 测试时建议 `max_tokens` 不低于 500。
+
+Claude Code 和 Codex 会自动管理 token 预算，正常使用不受影响。
+
+### 429 与冷却
+
+网关对失败的上游会做短时冷却（默认 60 秒）。如果遇到：
+
+```
+No deployments available for selected model, Try again in 60s
+```
+
+说明该模型的所有上游都在冷却中，等一会儿再试即可。多上游的模型会自动降级到备用上游，一般感知不到。
+
+### Codex 桌面版
+
+Codex 桌面版读取同一个 `~/.codex/config.toml`，配置方式一致。
+
+但要注意：**macOS 上从 Finder 或 Dock 启动的应用不继承 shell 环境变量**，可能导致 `env_key` 读不到。如果 CLI 能用而桌面版报鉴权失败，可以这样处理：
+
+```bash
+launchctl setenv PORTCLOUD_API_KEY "sk-你的key"
+```
+
+设置后重启桌面版即可。
+
+---
+
+## 七、其他客户端
+
+网关同时兼容 OpenAI 和 Anthropic 两套协议，三类客户端都能接。
+
+### 7.1 OpenAI 兼容客户端
+
+适用于 Chatbox、NextChat、Cherry Studio、Open WebUI 等，以及任何使用 OpenAI SDK 的程序：
+
+```bash
+curl https://litellm.portcloud.online/v1/chat/completions \
+  -H "Authorization: Bearer sk-你的key" \
+  -H "content-type: application/json" \
+  -d '{
+    "model": "hy3",
+    "messages": [{"role": "user", "content": "你好"}]
+  }'
+```
+
+如果用 OpenAI SDK，只需替换 `base_url`：
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://litellm.portcloud.online/v1",
+    api_key="sk-你的key",
+)
+
+resp = client.chat.completions.create(
+    model="deepseek-v4.1-flash",
+    messages=[{"role": "user", "content": "你好"}],
+)
+print(resp.choices[0].message.content)
+```
+
+### 7.2 Anthropic 兼容客户端
+
+适用于 Claude Code、Anthropic SDK，以及其他使用 Messages API 的程序：
+
+```bash
+curl https://litellm.portcloud.online/v1/messages \
+  -H "x-api-key: sk-你的key" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "content-type: application/json" \
+  -d '{
+    "model": "deepseek-v4.1-flash",
+    "max_tokens": 200,
+    "system": "你是一个简洁的助手。",
+    "messages": [{"role": "user", "content": "你好"}]
+  }'
+```
+
+用 Anthropic SDK：
+
+```python
+from anthropic import Anthropic
+
+client = Anthropic(
+    base_url="https://litellm.portcloud.online",
+    api_key="sk-你的key",
+)
+
+resp = client.messages.create(
+    model="deepseek-v4.1-flash",
+    max_tokens=200,
+    messages=[{"role": "user", "content": "你好"}],
+)
+print(resp.content[0].text)
+```
+
+Anthropic 协议的特性都已支持，包括 `system` 参数、多轮对话、工具调用（`tools`）、流式输出（`stream: true`）。
+
+另有一个辅助接口用于估算 token 数，Claude Code 等客户端会用到：
+
+```bash
+curl https://litellm.portcloud.online/v1/messages/count_tokens \
+  -H "x-api-key: sk-你的key" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "content-type: application/json" \
+  -d '{"model": "hy3", "messages": [{"role": "user", "content": "你好"}]}'
+```
+
+返回：
+
+```json
+{"input_tokens": 8}
+```
+
+### 7.3 端点对照
+
+| 端点 | 协议 | 适用 |
+|---|---|---|
+| `/v1/messages` | Anthropic Messages | Claude Code、Anthropic SDK |
+| `/v1/messages/count_tokens` | Anthropic Messages | token 估算 |
+| `/v1/responses` | OpenAI Responses | Codex、新式 OpenAI SDK |
+| `/v1/chat/completions` | OpenAI Chat | 大多数第三方客户端 |
+
+认证头 `x-api-key` 和 `Authorization: Bearer` 都支持，两套协议通用。
+
+---
+
+## 八、管理台
+
+网关自带 Web 管理台，可以查看用量、查看模型：
+
+```
+https://litellm.portcloud.online/ui
+```
+
+登录凭据由管理员提供。
+
+---
+
+## 小结
+
+两个工具的核心配置：
+
+**Claude Code** —— 三个环境变量（1M 模型记得加 `[1m]` 后缀）：
+
+```
+ANTHROPIC_BASE_URL=https://litellm.portcloud.online
+ANTHROPIC_AUTH_TOKEN=sk-你的key
+ANTHROPIC_MODEL=deepseek-v4.1-flash[1m]
+```
+
+**Codex** —— `~/.codex/config.toml` 里声明 provider，Key 走环境变量：
+
+```toml
+model = "deepseek-v4.1-flash"
+model_provider = "portcloud"
+
+[model_providers.portcloud]
+name = "Portcloud"
+base_url = "https://litellm.portcloud.online/v1"
+env_key = "PORTCLOUD_API_KEY"
+wire_api = "responses"
+```
+
+区别在于 Claude Code 走 Anthropic Messages 协议，Codex 走 OpenAI Responses 协议。
+
+网关同时兼容这两套协议，所以无论是 OpenAI 系还是 Anthropic 系的客户端，都能接进来：
+
+| 协议 | 端点 | 典型客户端 |
+|---|---|---|
+| Anthropic Messages | `/v1/messages` | Claude Code、Anthropic SDK |
+| OpenAI Responses | `/v1/responses` | Codex、新式 OpenAI SDK |
+| OpenAI Chat | `/v1/chat/completions` | Chatbox、Cherry Studio 等 |
+
+接入后的体验与直连官方 API 无异。
