@@ -99,9 +99,13 @@ claude
 
 > 如果该文件已存在，只需把 `env` 段合并进去，不要整个覆盖。
 
+完整的配置文件还可以包含 `modelPicker`，让 `/model` 选择器列出网关的模型，见 [4.6 节](#46-自定义-model-选择器)。
+
 ### 4.3 项目级配置
 
 只想在某个项目里用网关，可以在项目根目录建 `.claude/settings.json`，内容同上。项目级配置优先级高于用户级。
+
+> 注意 `modelPicker` 例外——它只认用户级配置，写在项目里不生效。
 
 ### 4.4 验证
 
@@ -168,6 +172,58 @@ hy4-preview-f[1m]
 - 后缀只影响客户端对上下文的判断，**不影响实际请求**。网关会自动去掉后缀再转发给上游
 - 网关对带后缀和不带后缀的模型名都接受，所以不加也能用，只是可能损失长上下文能力
 - 这个后缀是 Claude Code 侧的约定，**Codex 不适用**（Codex 的模型配置方式不同，见第五章）
+
+### 4.6 自定义 `/model` 选择器
+
+Claude Code 的 `/model` 命令默认只列出内置的 Claude 模型（Fable、Opus、Sonnet、Haiku）。这些模型在你的网关上并不存在，列在那里只会造成干扰。
+
+用 `modelPicker` 可以把选择器换成网关实际提供的模型。
+
+```json
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://litellm.portcloud.online",
+    "ANTHROPIC_AUTH_TOKEN": "sk-你的key",
+    "ANTHROPIC_MODEL": "deepseek-v4.1-flash[1m]"
+  },
+  "modelPicker": {
+    "replaceBuiltInOptions": true,
+    "options": [
+      { "model": "deepseek-v4.1-flash[1m]", "label": "DeepSeek V4.1 Flash", "description": "1M context · vision & tool calls" },
+      { "model": "hy4-preview[1m]", "label": "Hy 4 Preview", "description": "1M context" },
+      { "model": "hy4-preview-f[1m]", "label": "Hy 4 Preview F", "description": "1M context" },
+      { "model": "hy3", "label": "Hy 3", "description": "192K context" }
+    ]
+  }
+}
+```
+
+#### 关键字段
+
+| 字段 | 说明 |
+|---|---|
+| `replaceBuiltInOptions` | 设为 `true` 时，选择器**只显示 Default 行 + 你列出的模型**，内置的 Fable/Opus/Sonnet/Haiku 全部隐藏。不设或设为 `false` 时，你的模型会**追加**在内置列表之后 |
+| `options` | 有序列表，顺序即选择器中的显示顺序 |
+| `options[].model` | 模型 ID，**要和网关暴露的名字一致**（1M 模型记得带 `[1m]` 后缀） |
+| `options[].label` | 显示名称。省略时显示模型 ID |
+| `options[].description` | 副标题说明。省略时显示 `Custom model (<model-id>)` |
+| `options[].behavesAs` | 可选。把模型映射到某个已知模型族，让 Claude Code 了解它的能力特征 |
+
+#### 注意事项
+
+- **`replaceBuiltInOptions` 是替换，不是追加**。开启后内置模型和网关自动发现的模型都会被隐藏，所以要把想用的模型全部列进 `options`
+- **只认用户级和 managed 配置**。写在项目的 `.claude/settings.json` 里不生效，必须放在 `~/.claude/settings.json`
+- **不与其他来源合并**。多个地方定义 `modelPicker` 时，取优先级最高的那个，不会把列表拼起来
+- 修改后需要**重启 Claude Code** 才会生效
+
+#### 验证
+
+重启后敲 `/model`，应该能看到 Default 行加上你配置的模型，且没有内置的 Claude 模型。如果选择器里的模型名点进去报错，多半是 `model` 字段与网关实际名字不一致，用下面的命令核对：
+
+```bash
+curl https://litellm.portcloud.online/v1/models \
+  -H "x-api-key: sk-你的key"
+```
 
 ---
 
