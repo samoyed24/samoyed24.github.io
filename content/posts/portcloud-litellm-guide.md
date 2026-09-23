@@ -225,6 +225,73 @@ curl https://litellm.portcloud.online/v1/models \
   -H "x-api-key: sk-你的key"
 ```
 
+### 4.7 子 Agent 报 400 的修复
+
+**现象**：主对话一切正常，但一启动子 Agent（Agent 工具）就失败：
+
+```
+Agent "Inspect sidebar visual system" failed: Agent terminated early due to an API error:
+API Error: 400 anthropic_messages: Invalid model name passed in model=claude-opus-5-5.
+Call `/v1/models` to view available models for your key.
+```
+
+报错里的模型名有时是 `claude-opus-5-5`，有时是 `claude-haiku-4-5-20251001` 或 `claude-sonnet-5`。
+
+**原因**：`/model` 选择器只决定**主线程**用哪个模型。子 Agent 走的是另一条路径 —— 它按**档位**取模型，而档位对应的是 Anthropic 官方模型名：
+
+| 触发路径 | 发出的模型名 |
+|---|---|
+| 子 Agent 指定 `model: opus` | `claude-opus-5-5` |
+| 子 Agent 指定 `model: sonnet` | `claude-sonnet-5` |
+| 子 Agent 指定 `model: haiku`（Explore 等只读 Agent 的默认档） | `claude-haiku-4-5-20251001` |
+
+这些名字在你的网关上并不存在，会被 LiteLLM 的请求闸门直接拦下并返回 400 —— 请求根本到不了上游。
+
+**修复**：在 `~/.claude/settings.json` 的 `env` 里补四个变量，把三个档位都指向网关的模型：
+
+```json
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://litellm.portcloud.online",
+    "ANTHROPIC_AUTH_TOKEN": "sk-你的key",
+    "ANTHROPIC_MODEL": "deepseek-v4.1-flash[1m]",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "deepseek-v4.1-flash[1m]",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "deepseek-v4.1-flash[1m]",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "deepseek-v4.1-flash[1m]",
+    "CLAUDE_CODE_SUBAGENT_MODEL": "deepseek-v4.1-flash[1m]"
+  }
+}
+```
+
+| 变量 | 作用 |
+|---|---|
+| `ANTHROPIC_DEFAULT_OPUS_MODEL` | 把 opus 档重映射到网关模型 |
+| `ANTHROPIC_DEFAULT_SONNET_MODEL` | 把 sonnet 档重映射到网关模型 |
+| `ANTHROPIC_DEFAULT_HAIKU_MODEL` | 把 haiku 档重映射到网关模型 |
+| `CLAUDE_CODE_SUBAGENT_MODEL` | 兜底开关，所有子 Agent 统一用这个模型 |
+
+四个都设最稳妥。`CLAUDE_CODE_SUBAGENT_MODEL` 单独设就能让子 Agent 跑起来；三个档位变量则保证即使显式写了 `model: opus` 这类档位也不会再报错。
+
+映射目标按需选择：想让所有档位都用同一个模型，就都填 `deepseek-v4.1-flash[1m]`；也可以把 haiku 档（后台小任务、只读 Explore）指到更便宜的模型以省额度。
+
+> **关于 `[1m]` 后缀**：档位重映射的目标模型同样建议带上后缀（1M 模型），理由与 [4.5 节](#45-关于-1m-后缀)相同。实测网关对带与不带后缀都接受，会先剥掉后缀再转发。
+
+**验证**：改完重启 Claude Code，让子 Agent 干点活：
+
+```
+用 Agent 工具，subagent_type 选 Explore，model 选 haiku，列出 /tmp 下的文件
+```
+
+能正常返回就说明修好了。也可以去网关侧确认不再有被拒的请求：
+
+```bash
+docker logs litellm 2>&1 | grep "Invalid model name"
+```
+
+没有输出即为正常。
+
+> 想让网关一次修好**所有**客户端（包括其他机器、其他工具），也可以在 LiteLLM 配置的 `router_settings` 下加 `model_group_alias`，把这些 Claude 档位名直接映射到网关模型。本文只介绍客户端侧的改法。
+
 ---
 
 ## 五、接入 Codex
@@ -317,6 +384,20 @@ Defaulting to fallback metadata; this can degrade performance and cause issues.
 ```
 
 这是因为 Codex 内置的模型表里没有这些模型名。**不影响正常使用**，忽略即可。
+
+### `unrecognized_model` 日志
+
+Claude Code 启动时可能打印一行：
+
+```
+[claude-code:unrecognized_model] {"model":"deepseek-v4.1-flash[1m]","query_source":"sdk"}
+```
+
+这只是 Claude Code 在说「这个模型名不在我的内置模型表里」，属于提示性质。**它不会拦截请求、也不会改写模型名**，网关侧对应请求仍是 200。使用自建网关时必然出现，忽略即可。
+
+### 子 Agent 与档位重映射
+
+子 Agent 不跟随 `/model` 选择器，而是按档位（opus / sonnet / haiku）取模型，发的是 Anthropic 官方模型名。不重映射就会 400，详见 [4.7 节](#47-子-agent-报-400-的修复)。
 
 ### 推理模型的 token 消耗
 
@@ -465,12 +546,16 @@ https://litellm.portcloud.online/ui
 
 两个工具的核心配置：
 
-**Claude Code** —— 三个环境变量（1M 模型记得加 `[1m]` 后缀）：
+**Claude Code** —— 环境变量（1M 模型记得加 `[1m]` 后缀，子 Agent 需要重映射档位）：
 
 ```
 ANTHROPIC_BASE_URL=https://litellm.portcloud.online
 ANTHROPIC_AUTH_TOKEN=sk-你的key
 ANTHROPIC_MODEL=deepseek-v4.1-flash[1m]
+ANTHROPIC_DEFAULT_OPUS_MODEL=deepseek-v4.1-flash[1m]
+ANTHROPIC_DEFAULT_SONNET_MODEL=deepseek-v4.1-flash[1m]
+ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-v4.1-flash[1m]
+CLAUDE_CODE_SUBAGENT_MODEL=deepseek-v4.1-flash[1m]
 ```
 
 **Codex** —— `~/.codex/config.toml` 里声明 provider，Key 走环境变量：
