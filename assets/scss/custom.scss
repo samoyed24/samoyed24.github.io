@@ -1,0 +1,43 @@
+/*
+*   站点级自定义样式（覆盖主题 themes/hugo-theme-stack/assets/scss/custom.scss）
+*
+*   滚动条美化：
+*   Windows / Linux 默认是带箭头的宽滚动条，与本站的卡片风格不搭。
+*   这里统一改成细滚动条 + 主题配色。
+*
+*   注意只用标准属性 scrollbar-color / scrollbar-width，不要用
+*   ::-webkit-scrollbar —— 后者会在 macOS 上把系统原生的 overlay
+*   滚动条强制换成占位式滚动条，反而变丑。标准属性在 macOS 上会被
+*   忽略，原生 overlay 外观得以保留。
+*/
+
+:root {
+    --scrollbar-thumb: #c1c1c1;
+    --scrollbar-thumb-hover: #a8a8a8;
+    --scrollbar-track: transparent;
+}
+
+:root[data-scheme="dark"] {
+    --scrollbar-thumb: rgba(255, 255, 255, 0.25);
+    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.4);
+}
+
+/* 根元素上的值作用于视口滚动条 */
+html {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+/*
+*   scrollbar-width 不继承，内部滚动容器需要单独声明；
+*   scrollbar-color 会继承，这里一并写上以便按容器调整。
+*/
+pre,
+.highlight,
+.table-wrapper,
+.toc-nav,
+.subsection-list,
+#main-menu {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
